@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+<!--        <meta name="viewport" content="width=device-width, initial-scale=1">-->
+        <meta name="viewport" content="initial-scale=1,minimum-scale=1.0,maximum-scale=10.0, user-scalable=yes, width=device-width">
+        <title>Todo List</title>
+        
+        <style>
+            .modal {
+                display: none; position: fixed; z-index: 1;  left: 0; top: 0; width: 100%; height: 100%;
+                overflow: auto; background-color: rgb(0,0,0); background-color: rgba(0,0,0,0.4); 
+            }
+
+            .modal-content {
+                background-color: #fefefe; margin: 15% auto; padding: 20px; 
+                border: 1px solid #888; width: 80%;
+            }
+
+            .close-modal {
+                color: #aaa; float: right; font-size: 28px; font-weight: bold;
+            }
+
+            .close-modal:hover, .close-modal:focus {
+                color: black; text-decoration: none; cursor: pointer;
+            }
+            .modal-element { width: 90%; }
+            .cursor { cursor : pointer; }
+            
+            .inline-block { display: inline-block ; clear: both; }
+            .reminder { width : 100px; display: inline-block ;}
+            .filter_box {width : 100px; clear: both;  display: inline-block ;  }
+            .add_Todo { 
+                background-color: yellow; color: black; width :25px; text-align: center;
+                border: 2px solid black; clear: both; float: right; display: inline-block;
+                cursor : pointer;
+            }
+            .date_time { font-size: 12px; cursor : pointer; }
+            .del_btn {
+                clear: both; float: right; width: 70px; background-color: red; color: white; 
+                text-align: center; border: 2px solid black; cursor : pointer;
+            }
+            
+            .title {
+                width : 90%; white-space: pre-wrap; word-wrap: break-word; font-size: 22px;
+            }
+            .description {
+                width : 95%; white-space: pre-wrap; word-wrap: break-word; font-size: 16px;
+                cursor : pointer;
+            }
+            .checked { padding-right: 8px; }
+        </style>
+        
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.23.1/babel.min.js" type="text/javascript"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.3.2/react.min.js" type="text/javascript"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.3.2/react-dom.min.js" type="text/javascript"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.6.0/redux.min.js" type="text/javascript"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react-redux/4.4.5/react-redux.min.js" type="text/javascript"></script>
+
+        <script type="text/babel">
+        const Component = React.Component, createClass = React.createClass, render = ReactDOM.render,
+        combineReducers = Redux.combineReducers,
+        Provider = ReactRedux.Provider, connect = ReactRedux.connect,
+        thunkMiddleware = ({dispatch, getState}) => next => action => 
+           (typeof action === 'function') ? action(dispatch, getState) : next(action),
+        finalCreateStore = Redux.applyMiddleware(thunkMiddleware)(Redux.createStore);
+
+        if(typeof localStorage["tron_todo"] == undefined){
+            localStorage["tron_todo"] = JSON.stringify([]);
+        }
+        
+        var tmp = JSON.parse(localStorage["tron_todo"]);
+
+        function prefix_zero(num) {
+            return (num + "").length == 1 ? "0"+num : num;
+        }
+
+        function get_this_time(){
+            var time = new Date();
+            return prefix_zero(time.getDate()) + "/" + prefix_zero(time.getMonth()) + "/" + time.getFullYear() + " " + prefix_zero(time.getHours()) + ":" + prefix_zero(time.getMinutes());
+        }
+
+        function docId(id){
+            return document.getElementById(id);
+        }
+
+        function counting(arr_todo){
+            var incomplete = 0;
+            for (let i = 0; i< arr_todo.length; i++){
+                if(arr_todo[i].status == 0) ++incomplete;
+            }
+            return {incomplete , complete : arr_todo.length - incomplete};
+        }
+
+
+        var Modal = createClass({
+            componentDidUpdate : function(){
+                if(docId('datetime') != null) docId('datetime').value = get_this_time();
+            },
+            render : function(){
+                return (<div id="modal" className="modal">
+                    <div className="modal-content">
+                        <span id="close-modal" className="close-modal">&times;</span>
+                        {this.props.modal_form}
+                    </div>
+                </div>);               
+            }
+        });
+
+        var TodoList = ({addTodo, modal_form, changeModal, checkedBoxClick, todo_store, count_store, checkTodo, filter_store, filterTodo, editTodo, deleteTodo}) => 
+        <div style={ {'width' : '98%', 'border' : '2px solid brown' , 'padding' : '5px'} } >
+            <HeadTodo/><Filter filterTodo={filterTodo}/>
+            &nbsp;&nbsp;
+            <AddTodo addTodo={addTodo} changeModal={changeModal} /><hr/>
+            <CountTodo count_store={count_store}/><hr/>
+            
+            <DetailList onChange={checkedBoxClick} todo_store={todo_store} checkTodo={checkTodo} filter_store = {filter_store} changeModal={changeModal} editTodo={editTodo} deleteTodo={deleteTodo} />
+            <Modal modal_form={modal_form} />
+        </div>;
+
+        let HeadTodo = () => <div className="reminder" >Reminders{'  '}</div>;
+        
+        let Filter = ({filterTodo}) => 
+        <select className="filter_box" defaultValue="all" onChange={(e) => filterTodo(e.target.value)}>
+            <option value="all">All</option>
+            <option value="incomplete">Incomplete</option>
+            <option value="complete">Complete</option>
+        </select>;
+        
+        let AddTodo = ({addTodo , changeModal}) => {
+            return(<div className="add_Todo" onClick={ () => { 
+            let title_a = '' , description_a = '' , date_time_let_a = get_this_time();
+            changeModal( 
+                <div>
+                    <h2>New Todo</h2>
+                    <input type="text" placeholder="Title" className="modal-element" id="title"
+                            onChange={(e)=> { title_a = e.target.value } } /><br/><br/>
+                    <textarea type="text" placeholder="Description" rows="3" className="modal-element" id="description" 
+                                onChange={(e)=> { description_a = e.target.value } } /><br/><br/>
+                    <input type="text" placeholder="Date & Time" id="datetime"
+                                onChange={(e)=> { date_time_let_a = e.target.value } } /><br/><br/>
+                    <button onClick={() => {
+                        if(/\S/.test(title_a) && title_a != null){
+                            addTodo({title : title_a ,description : description_a , status : 0 , date_time : date_time_let_a});
+                            title_a = ''; description_a = ''; date_time_let_a = get_this_time();
+                            docId('title').value = ""; docId('description').value = "";
+                            docId('modal').style.display = "none";
+                        }else {
+                            docId('title').style.border = "2px solid red"; docId('title').value = "";
+                            setTimeout(() => {docId('title').style.border = ""; },500);
+                        }
+                    }}>OK</button>
+                </div>
+            );
+            docId('modal').style.display = "block"; 
+            setTimeout(function(){ 
+                if(docId('title') != null){
+                    docId('title').value = ""; docId('description').value = "";
+                }
+            },1)
+            }} ><b>+</b></div>);
+        };
+        
+        let CountTodo = ({ count_store }) => 
+            <div> {count_store.incomplete} Incomplete {count_store.complete} Complete</div>;
+        
+        let DetailList = ({ onChange, todo_store ,checkTodo , filter_store , changeModal , editTodo , deleteTodo }) => {
+            
+            var rows = todo_store.map((value, index) => {
+                
+            if(filter_store == 'incomplete' && value.status == 1 || 
+                   filter_store == 'complete' && value.status == 0){}
+            else{
+                return(                   
+                <DetailOne checkTodo={checkTodo} checked={ value.status != 0 } id = {index}
+                    title={value.title} description={value.description} date_time={value.date_time}
+                    status={value.status} changeModal={changeModal} editTodo={editTodo} deleteTodo={deleteTodo} >
+                </DetailOne> 
+                );
+            }                    
+          });
+          return <div>{rows}</div>;  
+        };
+        
+        let DetailOne = ({checked , id, title , description , date_time , status, checkTodo , changeModal , editTodo , deleteTodo}) => {
+        
+            let editer = () => {
+                let title_e = title; let description_e = description; let date_time_let_e = date_time;
+                changeModal( 
+                    <div>
+                        <h2>Edit Todo</h2>
+                        <input type="text" id="title_e" className="modal-element" onChange={(e)=> { title_e = e.target.value } }  /><br/><br/>
+                        <textarea type="text" id="description_e" rows="3" className="modal-element" onChange={(e)=> { description_e = e.target.value } } /><br/><br/>
+                        <input type="text" placeholder="Date & Time" id="date_time_let_e" onChange={(e)=> { date_time_let_e = e.target.value } } /><br/><br/>
+                        <button onClick={() => {
+                            if(/\S/.test(title_e) && title_e != null){
+                                editTodo(id,title_e, description_e , date_time_let_e);
+                                docId('modal').style.display = "none";
+                            }else {
+                                docId('title_e').style.border = "2px solid red"; 
+                                docId('title_e').value = title;
+                                setTimeout(() => {docId('title_e').style.border = ""; },100);
+                            }
+                        }}>Edit</button>
+                    </div>
+                );
+
+                docId('modal').style.display = "block"; 
+                setTimeout(function(){
+                    docId('title_e').value = title_e;
+                    docId('description_e').value = description_e;
+                    docId('date_time_let_e').value = date_time_let_e;
+                }, 1);     
+            };
+            
+            
+        return (
+        <div  >
+            <div className="inline-block checked">
+                <input className="inline-block" onChange={() => checkTodo(id,checked)} type="checkbox" defaultChecked={checked} /> 
+            </div>
+            <div className="cursor title inline-block" onClick={ () => editer() }>{title}</div><br/>
+                <div style={{'height' : '3px'}}></div>
+
+            <div className="description inline-block" onClick={ () => editer() } >
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{description}</div><br/><br/>
+            <div className="inline-block date_time" onClick={ () => editer() }>{date_time}</div>
+            <div className="inline-block del_btn" onClick={ () => { 
+                if(confirm('Are you sure delete')){
+                    deleteTodo(id,status);
+                }                 
+            }}>Delete</div>
+            <hr/>
+        </div>);
+        };
+        
+        const changeModal = function(form){
+            return function (dispatch) { dispatch({ type: 'Change_Modal', form }); } 
+        };
+        
+        const addTodo = function(obj){
+              return function (dispatch) { dispatch({ type: 'Add_Todo', obj }); }
+        };
+            
+        const checkTodo = function(index,check){
+             return function (dispatch) { dispatch({ type: 'Check_Todo' , index , check }) }
+        }
+        
+        const filterTodo = function(filter_type){
+            return function (dispatch) { dispatch({ type: 'Filter_Todo' , filter_type }) }
+        }
+
+        const editTodo = function(id, title, description , date_time){
+              return function (dispatch) { dispatch({ type: 'Edit_Todo', id , title , description , date_time }); }
+        };
+
+        const deleteTodo = function(id, status){
+              return function (dispatch) { dispatch({ type: 'Delete_Todo', id ,status }); }
+        };
+
+       let todoReducer = (state = tmp, action) => {
+            switch(action.type) {
+                case 'Add_Todo' : 
+                    localStorage.tron_todo = JSON.stringify([ ...state, action.obj]);  
+                    return [ ...state, action.obj]; 
+                case 'Check_Todo' : var new_state = [...state];
+                    new_state[action.index].status = action.check ? 0 : 1;
+                    localStorage.tron_todo = JSON.stringify(new_state);
+                    return new_state;
+                case 'Edit_Todo' : var new_state = [...state];
+                        (new_state[action.id]).title = action.title;
+                        (new_state[action.id]).description = action.description;
+                        (new_state[action.id]).date_time = action.date_time;
+                        localStorage.tron_todo = JSON.stringify(new_state);
+                    return new_state;
+                case 'Delete_Todo' : var new_state = [...state];
+                    new_state.splice(action.id, 1);
+                    localStorage.tron_todo = JSON.stringify(new_state);
+                    return new_state;
+                default : return state;
+            }
+        };
+       
+       let modalReducer = (state = '', action) => {
+            switch(action.type) {
+                 case 'Change_Modal' : return action.form; 
+                 default : return state;   
+            }
+       }
+       
+       let countReducer = (state = counting(tmp), action) => {
+           switch(action.type) {
+               case 'Add_Todo' : return Object.assign({},state,{ incomplete : state.incomplete + 1 });
+               case 'Check_Todo' : 
+                   if(action.check == false) {
+                        return Object.assign({}, state,
+                        { incomplete : state.incomplete - 1, complete : state.complete + 1 });
+                   }else {
+                       return Object.assign({}, state,
+                        { incomplete : state.incomplete + 1, complete : state.complete - 1 });
+                   }
+               case 'Delete_Todo' : 
+                   if(action.status == 0){
+                        return Object.assign({}, state,{ incomplete : state.incomplete - 1 });
+                   }else {
+                        return Object.assign({}, state,{ complete : state.complete - 1 });
+                   }
+               default : return state;
+           }
+       }
+       
+       let filterReducer = (state = 'all', action) => {
+            switch(action.type) {
+                case 'Filter_Todo' : return action.filter_type;
+                default : return state;
+            }
+       }
+
+        const todoListApp = combineReducers({ todoReducer , modalReducer , countReducer , filterReducer });
+        
+        let store = finalCreateStore(todoListApp);    
+
+        const mapStateToProps = (state) => ({ 
+            todo_store : state.todoReducer , modal_form : state.modalReducer ,
+            count_store : state.countReducer , filter_store : state.filterReducer
+        });
+
+        const mapDispatchToProps = (dispatch) => ({
+            addTodo : (text) => { dispatch(addTodo(text)) },
+            changeModal : (form) => { dispatch(changeModal(form)) },
+            checkTodo : (index, check) => { dispatch(checkTodo(index,check)) },
+            filterTodo : (filter_type) => { dispatch(filterTodo(filter_type)) },
+            editTodo : (id, title, description , date_time) => { dispatch(editTodo(id, title, description , date_time)) },
+            deleteTodo : (id, status) => { dispatch(deleteTodo(id, status)) }
+        });
+        
+        const ToApp = connect(mapStateToProps, mapDispatchToProps)(TodoList);
+       
+        render(<Provider store={store}><ToApp /></Provider>, document.getElementById('root'))
+
+        docId("close-modal").onclick = function() {
+            if(docId('title') != null){
+                docId('title').value = ""; docId('description').value = "";
+            }
+            docId('modal').style.display = "none";
+        }
+       
+        </script>
+    </head>
+    <body>
+        <div id="root"></div>
+    </body>
+    
+</html>
