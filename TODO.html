@@ -65,7 +65,7 @@
            (typeof action === 'function') ? action(dispatch, getState) : next(action),
         finalCreateStore = Redux.applyMiddleware(thunkMiddleware)(Redux.createStore);
 
-        if(typeof localStorage["tron_todo"] == undefined){
+        if(typeof localStorage["tron_todo"] == "undefined"){
             localStorage["tron_todo"] = JSON.stringify([]);
         }
         
